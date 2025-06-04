@@ -1,0 +1,5 @@
+{
+    "gpus" : 2,
+    "attempts_per_chat" : 8,
+    "timeout" : 1200
+}
