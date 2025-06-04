@@ -18,4 +18,10 @@ Many problems can be considered as a translation task:
 Syntran's general design is shown in the flowchart below:
 ![flowchart showing the design of SynTran](assets/SynTran.png "SynTran Design")
 
-By specifying the desired transformations, prompt and specification, oracle, and oracle feedback format, you can leverage the automated feedback loop and reinforcement learning infrastructure already established to perform code translation utilizing your available computing resources and preferred model.
+By specifying 
+- desired static transformation(s)
+- prompt and specification
+- oracle(s)
+- oracle(s) feedback format
+
+you can leverage the automated feedback loop and reinforcement learning infrastructure already established to perform code translation utilizing your available computing resources and preferred model.
