@@ -1,0 +1,3 @@
+[submodule "tasks/CUDA-to-OpenMP/benchmarks/HeCBench"]
+	path = tasks/CUDA-to-OpenMP/benchmarks/HeCBench
+	url = https://github.com/zjin-lcf/HeCBench.git
