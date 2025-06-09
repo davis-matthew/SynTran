@@ -1,3 +1,6 @@
+//https://www.olcf.ornl.gov/wp-content/uploads/2021/08/ITOpenMP_Day1.pdf
+
+
 Recap: OpenMP Worksharing
 #pragma omp parallel, #pragma omp parallel for
 • Creates a team of OpenMP threads that execute the structured-block that

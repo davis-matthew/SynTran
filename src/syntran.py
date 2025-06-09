@@ -1,8 +1,12 @@
 import json
 import argparse
 import ollama
+import subprocess
+import os
+import concurrent
+import time
 
-# New-Tool Design:
+# Syntran Design:
 #
 # ------------------------------------------------------------------------
 #                  Task Definition
@@ -23,8 +27,10 @@ clients = None
 
 def load_config(config_path):
     global config
+    global clients
     with open(config_path, 'r') as file:
         config = json.load(file)
+    clients = [None] * config['gpus']
 
 def load_task(task_path):
     global task
@@ -32,19 +38,21 @@ def load_task(task_path):
         task = json.load(file)
     task['prompts']['system'] = task['prompts']['system'].replace('+SPEC_INPUT+', task['specifications']['input']).replace('+SPEC_OUTPUT+', task['specifications']['output'])
 
-def load_code(code_path):
+def load_code(code_paths):
     global code
-    with open(code_path, 'r') as file:
-        code = file.read()
-    code = preprocess(code)
+    code = []
+    for code_path in code_paths:
+        with open(code_path, 'r') as file:
+            code.append(preprocess(file.read()))
 
 def load_gpu(gpu):
+    global clients
     port = 11434
     while True:
         try:
             clients[gpu] = ollama.Client(host="http://127.0.0.1:"+str(port+gpu), timeout = 300)
             response = clients[gpu].chat(
-                model=config['llm'], 
+                model=task['llm'], 
                 messages=[{"role": "system", "content": "Initializing model"}]
             )
             if response:
@@ -52,15 +60,16 @@ def load_gpu(gpu):
                 return True
             else:
                 print(f"ERROR - failed to load model on gpu")
-        except:
-            print(f"ERROR - failed to load model on gpu (could not send request)")
+        except Exception as e:
+            print(f"ERROR - failed to load model on gpu (could not send request) - {e}")
+        time.sleep(0.1) # Prevent tight looping
 
 def preprocess(src):
     return src #identity transformation
     #task['preprocessing']
 
 def save_translation(thread_id, translation, attempts, status, current_time):
-    with open(f"{task['output']}/Chat{thread_id}/Attempt{attempts}") as file:
+    with open(f"{task['output']}/Chat{thread_id}/Attempt{attempts}") as file: #FIXME: add code file prefix
         file.write(translation)
     
     if status == 'success':
@@ -116,7 +125,8 @@ def run():
     load_code(args.code)
 
     # Start ollama
-    subprocess.run(['start_ollama.sh', args.config])
+    print(os.path.dirname(os.path.abspath(__file__)))
+    subprocess.run(['./start_ollama.sh', args.config], cwd=os.path.dirname(os.path.abspath(__file__)))
 
     # Preload model to GPUs
     with concurrent.futures.ThreadPoolExecutor(max_workers=config['gpus']) as executor:
@@ -124,38 +134,38 @@ def run():
         concurrent.futures.wait(futures)
 
     # Run
-    successful = False
-    start_time = time.time()
-    with concurrent.futures.ThreadPoolExecutor(max_workers=config['gpus']) as executor:
-        futures = {}
+    #for llm in task['llms']: # FIXME: We'd like to be able to iterate over the llms
+        for code_sample in code:
+            successful = False
+            start_time = time.time()
+            with concurrent.futures.ThreadPoolExecutor(max_workers=config['gpus']) as executor:
+                futures = {}
 
-        while time.time() - start_time < config['timeout']:
-            # Restart unsuccessful threads who reached attempt max
-            for future in list(futures):
-                if future.done():
-                    if future.result(): # Successful translation
-                        successful = True
-                        stop_event.set()
+                while time.time() - start_time < config['timeout']:
+                    # Restart unsuccessful threads who reached attempt max
+                    for future in list(futures):
+                        if future.done():
+                            if future.result(): # Successful translation
+                                successful = True
+                                stop_event.set()
+                                break
+                                
+                            if not stop_event.is_set(): # Restart the chat
+                                thread_id = futures.pop(future)
+                                futures[executor.submit(translation_thread, start_time, time.time(), thread_id, code_sample)] = thread_id
+
+                    if successful:
                         break
-                        
-                    if not stop_event.is_set(): # Restart the chat
-                        thread_id = futures.pop(future)
-                        futures[executor.submit(translation_thread, start_time, time.time(), thread_id, preprocessed_code)] = thread_id
+
+                    # Start up initial threads
+                    if not futures:
+                        futures = {executor.submit(translation_thread, start_time, time.time(), i, code_sample): i for i in range(config['gpus'])}
+
+                    time.sleep(0.1)  # Prevent tight looping
+
+                stop_event.set()
 
             if successful:
-                break
-
-            # Start up initial threads
-            if not futures:
-                futures = {executor.submit(translation_thread, start_time, time.time(), i, preprocessed_code): i for i in range(config['gpus'])}
-
-            time.sleep(0.1)  # Prevent tight looping
-
-        stop_event.set()
-
-    if successful:
-        print("Success")
-    
-    return successful
+                print("Success")
 
 run()
