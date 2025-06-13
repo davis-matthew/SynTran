@@ -50,6 +50,7 @@ def load_gpu(gpu):
     port = 11434
     while True:
         try:
+            print(f"initializing model on {port+gpu}")
             clients[gpu] = ollama.Client(host="http://127.0.0.1:"+str(port+gpu), timeout = 300)
             response = clients[gpu].chat(
                 model=task['llm'], 
@@ -127,6 +128,7 @@ def run():
     # Start ollama
     print(os.path.dirname(os.path.abspath(__file__)))
     subprocess.run(['./start_ollama.sh', args.config], cwd=os.path.dirname(os.path.abspath(__file__)))
+    print("Ollama started, loading models")
 
     # Preload model to GPUs
     with concurrent.futures.ThreadPoolExecutor(max_workers=config['gpus']) as executor:

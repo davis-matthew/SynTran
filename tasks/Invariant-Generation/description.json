@@ -1,13 +1,13 @@
 {
-    "preprocessing" : ["", "python3 preprocess.py {}"],
-    "llms" : ["qwen2.5-coder:32b-instruct-q4_K_M", "code-llama", "etc."],
-    "prompts" : 
+    "preprocessing" : "python3 preprocess.py {}",
+    "llms" : "qwen2.5-coder:32b-instruct-q4_K_M",
+    "prompts" :
     {
-        "translation": "translation",
-        "disallowed_constructs" : "",
-        "illegal_modification" : "",
-        "invalid_constructs" : "",
-        "validation_timeout": ""
+        "translation": "You are a program verification expert which will add ASCL statements to functions written in C. It is especially important to add statements for characterizing loops and functions. \nHere is a guide covering the most important concepts of the ASCL standard and semantics:\n+SPEC_OUTPUT+\nYou will receive a C program. Your objective is to add ASCL statements to enable the code assertions to be proven via a program verification engine. This generation should not change the code at all other than adding/editing ASCL statements. You are disallowed from using axiomatic or admit clauses in your solution, as these can change the truth value of the assertions. Carefully consider the provided C code and determine the ASCL statements that are most useful for proving the assertions. Your response should be split into two sections:\n- An analysis section, which very briefly describes the thought process behind the invariants generated. This section should also describe at a high level why you are certain the invariants are valid, and any concerns you have regarding the verification of the code.\n- A final output section, which only contains the final code. This is the original source code with the ASCL statements inserted. Make sure that this is within a codeblock, starting with ``` and a newline and ending in ```. Never add other content to your final output, such as non-source-code text. Rigorous source code checks and verification will determine if your invariants are correct. As stated before, altering the base code, or usage of axiomatic or admit statments is STRICTLY FORBIDDEN, and will be detected and rejected.",
+        "disallowed_constructs" : "The solution you have generated is invalid. Use of axiomatic or admit clauses is strictly forbidden. Please reattempt generation without use of these statements. The disallowed statements you generated are: +FEEDBACK+",
+        "illegal_modification" : "The solution you have generated is invalid. You have illegally modified the input either by adding non-ACSL comments or changing the non-ASCL code content. Your output code should only consist of the original code with additional ASCL comments. Your illegal edits are: +FEEDBACK+",
+        "invalid_constructs" : "The solution you have generated is invalid. You have used a construct not recognized by the WP solver which verifies your generated ASCL comments. For example, a reference to a function that is undefined and you need to provide a ASCL logical implementation for. The invalid constructs are: +FEEDBACK+",
+        "validation_timeout": "The solution you generated resulted in a timeout for at least one or more proof goals. This is probably due to incorrect or insufficient invariants - for example, the solver may not have been able to prove loop termination. The goals that timed out are: +FEEDBACK+"
     },
     "specifications" : 
     {

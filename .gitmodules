@@ -1,3 +1,15 @@
 [submodule "tasks/CUDA-to-OpenMP/benchmarks/HeCBench"]
 	path = tasks/CUDA-to-OpenMP/benchmarks/HeCBench
 	url = https://github.com/zjin-lcf/HeCBench.git
+[submodule "tasks/Invariant-Generation/external/ESBMC-ibmc"]
+	path = tasks/Invariant-Generation/external/ESBMC-ibmc
+	url = https://github.com/adilanwar2399/ESBMC-ibmc.git
+[submodule "tasks/Invariant-Generation/external/Loopy"]
+	path = tasks/Invariant-Generation/external/Loopy
+	url = https://github.com/microsoft/loop-invariant-gen-experiments.git
+[submodule "tasks/Invariant-Generation/external/Lemur"]
+	path = tasks/Invariant-Generation/external/Lemur
+	url = https://github.com/wu-haoze/Lemur-program-verification.git
+[submodule "tasks/Invariant-Generation/external/AutoSpec"]
+	path = tasks/Invariant-Generation/external/AutoSpec
+	url = https://github.com/davis-matthew/AutoSpec-mirror.git
