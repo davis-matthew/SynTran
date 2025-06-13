@@ -9,7 +9,7 @@
 	url = https://github.com/davis-matthew/loop-invariant-gen-experiments.git
 [submodule "tasks/Invariant-Generation/external/Lemur"]
 	path = tasks/Invariant-Generation/external/Lemur
-	url = https://github.com/wu-haoze/Lemur-program-verification.git
+	url = https://github.com/davis-matthew/Lemur-program-verification.git
 [submodule "tasks/Invariant-Generation/external/AutoSpec"]
 	path = tasks/Invariant-Generation/external/AutoSpec
 	url = https://github.com/davis-matthew/AutoSpec-mirror.git
