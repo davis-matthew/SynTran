@@ -5,6 +5,7 @@ import subprocess
 import os
 import concurrent
 import time
+import threading
 
 # Syntran Design:
 #
@@ -51,7 +52,7 @@ def load_gpu(gpu):
     while True:
         try:
             print(f"initializing model on {port+gpu}")
-            clients[gpu] = ollama.Client(host="http://127.0.0.1:"+str(port+gpu), timeout = 300)
+            clients[gpu] = ollama.Client(host="http://localhost:"+str(port+gpu), timeout = 300)
             response = clients[gpu].chat(
                 model=task['llm'], 
                 messages=[{"role": "system", "content": "Initializing model"}]
@@ -62,30 +63,34 @@ def load_gpu(gpu):
             else:
                 print(f"ERROR - failed to load model on gpu")
         except Exception as e:
+            e = str(e)
+            if "Access Denied" in e or "ERR_ACCESS_DENIED" in e:
+                e = "unset http_proxy and https_proxy to use GPU requests"
             print(f"ERROR - failed to load model on gpu (could not send request) - {e}")
-        time.sleep(0.1) # Prevent tight looping
+        time.sleep(2) # Prevent tight looping
 
 def preprocess(src):
     return src #identity transformation
     #task['preprocessing']
 
-def save_translation(thread_id, translation, attempts, status, current_time):
-    with open(f"{task['output']}/Chat{thread_id}/Attempt{attempts}") as file: #FIXME: add code file prefix
+def save_translation(thread_id, translation, attempts, status, current_task_time, current_thread_time):
+    os.makedirs(f"{task['output']}/Chat{thread_id}", exist_ok=True)
+    with open(f"{task['output']}/Chat{thread_id}/Attempt{attempts}", 'w') as file: #FIXME: add code file prefix
         file.write(translation)
     
     if status == 'success':
-        with open(f"{task['output']}/solution") as file:
+        with open(f"{task['output']}/solution", 'w') as file:
             file.write(translation)
 
-def translation_thread(task_start_time, thread_start_time, thread_id, src, RLSF = False):
+def translation_thread(task_start_time, thread_start_time, thread_id, src, stop_event, RLSF = False):
     if not stop_event.is_set():
-        generation_successful = generation_loop(task_start_time, thread_start_time, thread_id, src, RLSF)
+        generation_successful = generation_loop(task_start_time, thread_start_time, thread_id, src, stop_event, RLSF)
         if generation_successful:
             stop_event.set()
             return True
     return False
 
-def generation_loop(thread_id, task_start_time, thread_start_time, src, RLSF = False):
+def generation_loop(thread_id, task_start_time, thread_start_time, src, stop_event, RLSF = False):
     status = 'translation'
     feedback = src
     attempts = 0
@@ -108,10 +113,10 @@ def generation_loop(thread_id, task_start_time, thread_start_time, src, RLSF = F
 
     return status == 'success'
 
-def verify():
+def verify(src):
     #TODO: implement
     #task['verifier']
-    return True
+    return 'success', None
 
 def run():
     # Setup
@@ -128,46 +133,48 @@ def run():
     # Start ollama
     print(os.path.dirname(os.path.abspath(__file__)))
     subprocess.run(['./start_ollama.sh', args.config], cwd=os.path.dirname(os.path.abspath(__file__)))
-    print("Ollama started, loading models")
+    print("Ollama finished starting up - loading models")
 
     # Preload model to GPUs
     with concurrent.futures.ThreadPoolExecutor(max_workers=config['gpus']) as executor:
         futures = [executor.submit(load_gpu, gpu) for gpu in range(config['gpus'])]
         concurrent.futures.wait(futures)
+    print("Model loaded on GPUs")
 
     # Run
+    stop_event = threading.Event()
     #for llm in task['llms']: # FIXME: We'd like to be able to iterate over the llms
-        for code_sample in code:
-            successful = False
-            start_time = time.time()
-            with concurrent.futures.ThreadPoolExecutor(max_workers=config['gpus']) as executor:
-                futures = {}
+    for code_sample in code:
+        successful = False
+        start_time = time.time()
+        with concurrent.futures.ThreadPoolExecutor(max_workers=config['gpus']) as executor:
+            futures = {}
 
-                while time.time() - start_time < config['timeout']:
-                    # Restart unsuccessful threads who reached attempt max
-                    for future in list(futures):
-                        if future.done():
-                            if future.result(): # Successful translation
-                                successful = True
-                                stop_event.set()
-                                break
-                                
-                            if not stop_event.is_set(): # Restart the chat
-                                thread_id = futures.pop(future)
-                                futures[executor.submit(translation_thread, start_time, time.time(), thread_id, code_sample)] = thread_id
+            while time.time() - start_time < config['timeout']:
+                # Restart unsuccessful threads who reached attempt max
+                for future in list(futures):
+                    if future.done():
+                        if future.result(): # Successful translation
+                            successful = True
+                            stop_event.set()
+                            break
+                            
+                        if not stop_event.is_set(): # Restart the chat
+                            thread_id = futures.pop(future)
+                            futures[executor.submit(translation_thread, start_time, time.time(), thread_id, code_sample, stop_event)] = thread_id
 
-                    if successful:
-                        break
+                if successful:
+                    break
 
-                    # Start up initial threads
-                    if not futures:
-                        futures = {executor.submit(translation_thread, start_time, time.time(), i, code_sample): i for i in range(config['gpus'])}
+                # Start up initial threads
+                if not futures:
+                    futures = {executor.submit(translation_thread, start_time, time.time(), i, code_sample, stop_event): i for i in range(config['gpus'])}
 
-                    time.sleep(0.1)  # Prevent tight looping
+                time.sleep(0.1)  # Prevent tight looping
 
-                stop_event.set()
+            stop_event.set()
 
-            if successful:
-                print("Success")
+        if successful:
+            print("Success")
 
 run()

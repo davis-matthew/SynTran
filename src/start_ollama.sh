@@ -2,6 +2,9 @@
 
 CONFIG=$1
 
+unset http_proxy
+unset https_proxy
+
 # Read the number of GPUs from the config file
 NUM_GPUS=$(grep '"gpus"' "$CONFIG" | awk -F ': ' '{print $2}' | tr -d ',')
 
