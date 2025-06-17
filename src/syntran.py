@@ -105,18 +105,22 @@ def generation_loop(thread_id, task_start_time, thread_start_time, src, stop_eve
             response = ollama.chat(model=task['llm'], messages=messages)
             translation = response['message']['content']
             generation_timestamp = time.time()
-            status, feedback = verify(translation)
+            status, feedback = verify(translation, thread_id)
             attempts += 1
             save_translation(thread_id, translation, attempts, status, generation_timestamp - task_start_time, generation_timestamp - thread_start_time)
         except Exception as e:
             print(f"ERROR - failed to process chat request (exception: {e}) ... retrying")
-
     return status == 'success'
 
-def verify(src):
-    #TODO: implement
-    #task['verifier']
-    return 'success', None
+def verify(src, thread_id):
+    os.makedirs(f"{task['output']}/Chat{thread_id}", exist_ok=True)
+    
+    subprocess.run(task['oracle'].replace("{}", f"{task['output']}/Chat{thread_id}/verifier_report.txt").split())
+    with open(f"{task['output']}/Chat{thread_id}/verifier_report.txt", 'r') as file:
+        status = file.readline().strip()
+        feedback = file.read().strip()
+
+    return status, feedback
 
 def run():
     # Setup
@@ -160,7 +164,8 @@ def run():
                             break
                             
                         if not stop_event.is_set(): # Restart the chat
-                            thread_id = futures.pop(future)
+                            #TODO: save thread restarts
+                            thread_id = futures.pop(future) separately instead of overwriting.
                             futures[executor.submit(translation_thread, start_time, time.time(), thread_id, code_sample, stop_event)] = thread_id
 
                 if successful:
@@ -176,5 +181,7 @@ def run():
 
         if successful:
             print("Success")
+        else:
+            print("Unable to find a solution for the provided code")
 
 run()
