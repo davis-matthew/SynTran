@@ -2,14 +2,15 @@
 
 CONFIG=$1
 
-unset http_proxy
-unset https_proxy
-
 # Read the number of GPUs from the config file
 NUM_GPUS=$(grep '"gpus"' "$CONFIG" | awk -F ': ' '{print $2}' | tr -d ',')
 
+# Starting port number for ollama instances
+BASE_PORT=$(grep '"base_port"' "$CONFIG" | awk -F ': ' '{print $2}' | tr -d ',')
+BASE_PORT=${BASE_PORT:-11434}
+
 for ((i=0; i<NUM_GPUS; i++)); do
-    PORT=$((11434 + i))
+    PORT=$(($BASE_PORT + i))
     CUDA_VISIBLE_DEVICES=$i OLLAMA_HOST="127.0.0.1:${PORT}" OLLAMA_KEEP_ALIVE="16h" OLLAMA_LOAD_TIMEOUT="30m" nohup ollama serve & #> ollama_logs/11434.txt 2>&1 & # FIXME: change log path
 
     (
@@ -23,4 +24,3 @@ for ((i=0; i<NUM_GPUS; i++)); do
 done
 
 wait "${OLLAMA_STARTUP_PROCESSES[@]}"
- 
