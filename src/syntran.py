@@ -1,6 +1,4 @@
-import json
 import ollama
-import subprocess
 import os
 import concurrent
 import time
@@ -25,7 +23,7 @@ import setup
 config = None
 task = None
 code = None
-clients = None
+chat_clients = None
 
 def preprocess(src):
     return sys.modules['preprocessor'].preprocess(src)
@@ -65,10 +63,10 @@ def generation_loop(thread_id, task_start_time, thread_start_time, src, stop_eve
 
         messages.append({"role": "user", "content" : task['prompts'][status].replace("+FEEDBACK+",feedback)})
         try:
-            response = ollama.chat(model=task['llm'], messages=messages)
+            response = ollama.chat(model=config['llm'], messages=messages)
             translation = response['message']['content']
-            os.makedirs(f"{task['output']}/Chat{thread_id}", exist_ok=True)
-            with open(f"{task['output']}/Chat{thread_id}/temp_generation.txt", 'w') as file:
+            os.makedirs(f"{config['output']}/Chat{thread_id}", exist_ok=True)
+            with open(f"{config['output']}/Chat{thread_id}/temp_generation.txt", 'w') as file:
                 file.write(translation)
 
             generation_timestamp = time.time()
@@ -79,32 +77,48 @@ def generation_loop(thread_id, task_start_time, thread_start_time, src, stop_eve
             print(f"ERROR - failed to process chat request (exception: {e}) ... retrying")
     return status == 'success' or status == 'terminate'
 
-def inference():
+def finetune():
     global config
     global task
     global code
-    global clients
-    
+    global chat_clients
+
     # Setup
     args = setup.parse_args()
     config = setup.load_config(args.config)
-    clients = setup.create_clients(config)
+    chat_clients = setup.create_chat_clients(config)
     task = setup.load_task(args.task)
     code = setup.load_code(config)
     setup.init_preprocessor()
     setup.init_verifier()
-    setup.init_ollama(config)    
+    setup.init_ollama(config)
+
+def inference():
+    global config
+    global task
+    global code
+    global chat_clients
+    
+    # Setup
+    args = setup.parse_args()
+    config = setup.load_config(args.config)
+    chat_clients = setup.create_chat_clients(config)
+    task = setup.load_task(args.task)
+    code = setup.load_code(config)
+    setup.init_preprocessor(os.path.dirname(args.task))
+    setup.init_verifier(os.path.dirname(args.task))
+    setup.init_ollama(args.config)
 
     # Run
     stop_event = threading.Event()
-    for llm in task['llms']:
+    for llm in config['llms']:
         # Preload model to GPUs
-        setup.preload_model(llm)
+        setup.preload_model(config, llm)
 
         for code_sample in code:
             code_sample = preprocess(code_sample)
 
-            with open(f"{task['output']}/current_problem.txt",'w') as file:
+            with open(f"{config['output']}/current_problem.txt",'w') as file:
                 file.write(code_sample)
             
             successful = False
@@ -112,7 +126,7 @@ def inference():
             with concurrent.futures.ThreadPoolExecutor(max_workers=config['gpus']) as executor:
                 futures = {}
 
-                while time.time() - start_time < config['timeout']:
+                while time.time() - start_time < config['task_timeout']:
                     # Restart unsuccessful threads who reached attempt max
                     for future in list(futures):
                         if future.done():

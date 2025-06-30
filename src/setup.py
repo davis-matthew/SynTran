@@ -21,47 +21,57 @@ def load_config(config_path):
         config = json.load(file)
     return config
 
-def create_clients(config):
+def create_chat_clients(config):
     return [None] * config['gpus']
 
 def load_task(task_path):
-    #TODO: replace all?
     with open(task_path, 'r') as file:
         task = json.load(file)
-    task['prompts']['system'] = task['prompts']['system'].replace('+SPEC_INPUT+', task['specifications']['input']).replace('+SPEC_OUTPUT+', task['specifications']['output'])
+    
+    for key in task['prompts']:
+        task['prompts'][key] = (
+            task['prompts'][key]
+            .replace('+SPEC_INPUT+', task['specifications']['input'])
+            .replace('+SPEC_OUTPUT+', task['specifications']['output'])
+        )
     return task
 
 def load_code(config):
     code_paths = config['code']
     code = []
     for code_path in code_paths:
-        with open(code_path, 'r') as file:
-            code.append(file.read())
+        temp = [code_path]
+        if os.path.isdir(code_path):
+            temp = (os.path.join(code_path,f) for f in os.listdir(code_path) if os.path.isfile(os.path.join(code_path, f)))
+        
+        for path in temp:
+            with open(path, 'r') as file:
+                code.append(file.read())
     return code
 
 def load_components(module_name, file_name):
-    spec = importlib.util.spec_from_file_location(module_name, {file_name})
+    spec = importlib.util.spec_from_file_location(module_name, file_name)
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
     spec.loader.exec_module(module)
     print(f"Loaded {module_name} from {file_name}")
 
-def init_preprocessor():
-    load_components('preprocessor','preprocess.py')
-def init_verifier():
-    load_components('verifier','verify.py')
+def init_preprocessor(task_dir):
+    load_components('preprocessor',f'{task_dir}/preprocess.py')
+def init_verifier(task_dir):
+    load_components('verifier',f'{task_dir}/verify.py')
 
 def init_ollama(config):
     subprocess.run(['./start_ollama.sh', config], cwd=os.path.dirname(os.path.abspath(__file__)))
     print("Ollama Initialized")
 
-def load_model_on_gpu(clients, gpu, llm):
+def load_model_on_gpu(chat_clients, config, gpu, llm):
     base_port = config.get('base_port', 11434)
     while True:
         try:
             print(f"initializing model {llm} on {base_port+gpu}")
-            clients[gpu] = ollama.Client(host="http://localhost:"+str(base_port+gpu), timeout = config['connection_timeout'])
-            response = clients[gpu].chat(
+            chat_clients[gpu] = ollama.Client(host="http://localhost:"+str(base_port+gpu), timeout = config['connection_timeout'])
+            response = chat_clients[gpu].chat(
                 model=llm, 
                 messages=[{"role": "system", "content": "Initializing model"}]
             )
@@ -80,8 +90,8 @@ def load_model_on_gpu(clients, gpu, llm):
                 print(f"ERROR - failed to load model on gpu (could not send request) - {e}")
         time.sleep(0.5) # Prevent tight looping
 
-def preload_model(llm):
+def preload_model(config, llm):
     with concurrent.futures.ThreadPoolExecutor(max_workers=config['gpus']) as executor:
-        futures = [executor.submit(load_model_on_gpu, gpu, llm) for gpu in range(config['gpus'])]
+        futures = [executor.submit(load_model_on_gpu, config, gpu, llm) for gpu in range(config['gpus'])]
         concurrent.futures.wait(futures)
     print("Model loaded on GPUs")

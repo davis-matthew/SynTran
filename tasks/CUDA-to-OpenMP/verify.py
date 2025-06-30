@@ -1,27 +1,22 @@
-import random
-import argparse
 import re
-import json
 import os
 import subprocess
-import sys
-
-args = argparse.ArgumentParser(description="command-line flag parser")
-args.add_argument("original_code",      help="The original code's path")
-args.add_argument("translated_code",    help="The translated code's path")
-args.add_argument("output_path",        help="The report file path")
-args = args.parse_args()
+import shutil
 
 def replace_function_index(mapping, new_code):
-    pass
+    # Backup
+    shutil.copyfile(mapping[0], os.path.join(os.path.dirname(mapping[0]), 'BACKUP'))
+    
+    # Replace
+    with open(mapping[0], 'r') as file:
+        content = file.read()
+    with open(mapping[0], 'w') as file:
+        #TODO: check these offsets not off by 1.
+        file.write(content[:mapping[1]] + new_code + content[mapping[2]+1:])
 
-
-
-def compile_code():
-    subprocess.run(['make','clean', '&&', 'make'])
-    # if fail, 
-    #generate_report(args.output_path, 'compilererror', COMPILER_ERROR)
-    pass
+def undo_function_replacement(mapping):
+    shutil.copyfile(os.path.join(os.path.dirname(mapping[0]), 'BACKUP'), mapping[0])
+    os.remove(os.path.join(os.path.dirname(mapping[0]), 'BACKUP'))
 
 cuda_to_openmp_func_mapping = {
     'deredundancy-kernel_createIndex6' : ('/home/mzu/SynTran/tasks/CUDA-to-OpenMP/benchmarks/HeCBench/src/deredundancy-omp/kernels.cpp', 4895, 6272),
@@ -581,47 +576,16 @@ def verify(original_code_path, translated_code_path):
         return 'invalidgeneration', 'Code block not present in generated translation. Make sure you provide the code block and surround it with ```.'
 
     replace_function_index(mapping, translated)
-    compile_code()
-    test()
-
-# def replace_function(file_path, function_name, function_code):
-#     """
-#     Replaces a function in a file
-
-#     Args:
-#         file_path (str): Path to the file.
-#         function_name (str): Name of the function to replace.
-#         function_code (str): The function code under test.
-#     """
-#     # make a copy for restore 
-#     replace_file(file_path, file_path + '.bak')
-
-#     try:
-#         with open(file_path, 'r') as file:
-#             content = file.read()
-#     except Exception as e:
-#         print(f"Failed to read the file: {file_path}: {e}")
-#         return False
-
-#     pattern = "// begin of {0}(.*?)// end of {0}".format(function_name)
-#     match = re.search(pattern, content, re.M | re.S)
-
-#     print("============= pattern match ===================")
-#     print(match)
-#     print("============= pattern match ===================")
-#     if match:
-#          # return the string obtained by replacing the leftmost non-overlapping
-#          # occurrences of pattern in string by the function_code
-#          new_content = re.sub(pattern, r"\n" + function_code + r"\n", content, 1, re.DOTALL)
-
-#          try:
-#              with open(file_path, 'w') as file:
-#                  file.write(new_content)
-#              print(f"Function '{function_name}' replaced successfully in '{file_path}'.")
-#              return True
-#          except Exception as e:
-#              print(f"Error writing to {file_path}: {e}")
-#              return False
-#     else:
-#         print(f"Function '{function_name}' not found in '{file_path}'.")
-#         return False
+    
+    compilation_result = subprocess.run(['cd', os.path.dirname(mapping[0]), '&&', 'make','clean', '&&', 'make'])
+    if not compilation_result.returncode == 0:
+        undo_function_replacement(mapping)
+        return 'compilererror', compilation_result.stderr
+    
+    execution_result = subprocess.run(['cd', os.path.dirname(mapping[0]), '&&','make','run'], stderr=subprocess.STDOUT)
+    if 'FAIL' in execution_result.stdout:
+        undo_function_replacement(mapping)
+        return 'translationerror', execution_result.stdout
+    
+    undo_function_replacement(mapping)
+    return 'success', ':)'
