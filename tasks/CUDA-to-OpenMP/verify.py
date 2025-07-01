@@ -561,12 +561,15 @@ cuda_to_openmp_func_mapping = {
 }
 
 def verify(original_code_path, translated_code_path):
-    mapping = cuda_to_openmp_func_mapping[os.path.splitext(os.path.basename(args.original_code))[0]]
-    if mapping == ('', 0, 0):
+    try:
+        mapping = cuda_to_openmp_func_mapping[os.path.splitext(os.path.basename(original_code_path))[0]]
+        if mapping == ('', 0, 0):
+            return 'terminate', 'This function mapping is unimplemented and the translation cannot be verified'
+    except:
         return 'terminate', 'This function mapping is unimplemented and the translation cannot be verified'
-
+    
     translated = ""
-    with open(args.translated_code, 'r') as file:
+    with open(translated_code_path, 'r') as file:
         translated = file.read()
 
     matches = re.findall(r'```(.*?)```', translated, re.DOTALL)

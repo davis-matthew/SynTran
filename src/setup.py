@@ -39,12 +39,14 @@ def load_task(task_path):
 def load_code(config):
     code_paths = config['code']
     code = []
+    config['code_paths'] = []
     for code_path in code_paths:
         temp = [code_path]
         if os.path.isdir(code_path):
             temp = (os.path.join(code_path,f) for f in os.listdir(code_path) if os.path.isfile(os.path.join(code_path, f)))
         
         for path in temp:
+            config['code_paths'].append(path)
             with open(path, 'r') as file:
                 code.append(file.read())
     return code

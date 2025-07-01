@@ -1,5 +1,5 @@
 #!/bin/bash
-
+module load ollama
 CONFIG=$1
 
 # Read the number of GPUs from the config file
