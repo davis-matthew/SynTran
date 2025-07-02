@@ -23,10 +23,6 @@ import shutil
 # * - RLSF is enabled during fine-tuning, but disabled for inference
 #
 
-#TODO-s:
-# 1. Allow for skipping a test file if a result is already generated
-# 2. Check verification
-
 config = None
 task = None
 code = None
