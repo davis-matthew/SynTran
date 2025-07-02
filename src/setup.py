@@ -12,6 +12,7 @@ def parse_args():
     args = argparse.ArgumentParser(description="command-line flag parser")
     args.add_argument("--config", type=str, required=True, help="Path to config .json file")
     args.add_argument("--task", type=str, required=True, help="Path to task description .json file")
+    args.add_argument("--recalculate-results", type=str, default=None, help="all (solutions and terminated recalculated), terminated (keep solutions, but retry terminated), none (keep both solution and terminated, run on any new files)")
     args = args.parse_args()
 
     return args

@@ -5,6 +5,9 @@ import time
 import threading
 import sys
 import setup
+import traceback
+import pathlib
+import shutil
 
 # Syntran Design:
 #
@@ -20,6 +23,10 @@ import setup
 # * - RLSF is enabled during fine-tuning, but disabled for inference
 #
 
+#TODO-s:
+# 1. Allow for skipping a test file if a result is already generated
+# 2. Check verification
+
 config = None
 task = None
 code = None
@@ -32,15 +39,16 @@ def verify(original_code_path, translated_code_path):
     return sys.modules['verifier'].verify(original_code_path, translated_code_path)
 
 def save_translation(thread_id, problem_name, translation, attempts, status, current_task_time, current_thread_time):
-    os.makedirs(f"{config['output']}/Chat{thread_id}/{problem_name}", exist_ok=True)
-    with open(f"{config['output']}/Chat{thread_id}/{problem_name}/Attempt{attempts}", 'w') as file:
+    output_path = f"{config['output']}/{problem_name}/Chat{thread_id}"
+    os.makedirs(output_path, exist_ok=True)
+    with open(f"{output_path}/Attempt{attempts}", 'w') as file:
         file.write(translation)
     
     if status == 'success':
-        with open(f"{config['output']}/solution", 'w') as file:
+        with open(f"{config['output']}/{problem_name}/solution", 'w') as file:
             file.write(translation)
     if status == 'terminate':
-        with open(f"{config['output']}/terminated", 'w') as file:
+        with open(f"{config['output']}/{problem_name}/terminated", 'w') as file:
             file.write(translation)
 
 def translation_thread(
@@ -68,6 +76,8 @@ def generation_loop(
     feedback = src_code
     attempts = 0
     messages = [{"role": "system", "content": task['prompts']['system']}]
+    output_path = f"{config['output']}/{problem_name}/Chat{thread_id}"
+    os.makedirs(output_path, exist_ok=True)
 
     while   not status == 'success' \
             and not status == 'terminate' \
@@ -78,12 +88,16 @@ def generation_loop(
         try:
             response = ollama.chat(model=llm, messages=messages)
             translation = response['message']['content']
-            os.makedirs(f"{config['output']}/Chat{thread_id}", exist_ok=True)
-            with open(f"{config['output']}/Chat{thread_id}/temp_generation.txt", 'w') as file:
+            messages.append({
+                "role": "assistant",
+                "content": translation
+            })
+            
+            with open(f"{output_path}/temp_generation.txt", 'w') as file:
                 file.write(translation)
 
             generation_timestamp = time.time()
-            status, feedback = verify(src_file, f"{config['output']}/Chat{thread_id}/temp_generation.txt")
+            status, feedback = verify(src_file, f"{output_path}/temp_generation.txt")
             attempts += 1
             save_translation(thread_id, problem_name, translation, attempts, status, generation_timestamp - task_start_time, generation_timestamp - thread_start_time)
         
@@ -96,6 +110,9 @@ def generation_loop(
                 time.sleep(0.5) # Prevent tight looping
             else:
                 print(f"ERROR - failed to process chat request (exception: {e}) ... retrying")
+                traceback.print_exc()
+    with open(f"{output_path}/chatlog.txt", 'w') as file:
+        file.write(str(messages))
     return status == 'success' or status == 'terminate'
 
 def finetune():
@@ -134,20 +151,35 @@ def inference():
     os.makedirs(config['output'], exist_ok=True)
 
     # Run
-    stop_event = threading.Event()
     for llm in config['llms']:
         # Preload model to GPUs
         setup.preload_model(config, llm)
 
         for idx in range(len(code)):
+            stop_event = threading.Event()
             code_file = config['code_paths'][idx]
             code_sample = preprocess(code[idx])
             problem_name = os.path.splitext(os.path.basename(code_file))[0]
             restart_counts = {}
             print(f'Starting {problem_name} w/ LLM {llm}')
 
+            folder = pathlib.Path(f"{config['output']}/{problem_name}")
+            if not (args.recalculate_results is None or args.recalculate_results == 'none'):
+                if args.recalculate_results == 'all':
+                    if folder.exists():
+                        shutil.rmtree(folder)
+                elif args.recalculate_results == 'terminated':
+                    if (folder / 'terminated').exists():
+                        shutil.rmtree(folder)
+                else:
+                    print("unrecognized recalculate results option... skipping")
+            else:
+                if folder.exists():
+                    print(f"\t{problem_name} result already exists... skipping")
+                    continue
+
             with open(f"{config['output']}/current_problem.txt",'w') as file:
-                file.write(code_sample)
+                file.write(code_sample) 
             
             successful = False
             start_time = time.time()
@@ -181,7 +213,7 @@ def inference():
                 stop_event.set()
 
             if successful:
-                print(f"Finished {problem_name}")
+                print(f"Finished {problem_name}\n")
             else:
                 print("Unable to find a solution for the provided code")
 

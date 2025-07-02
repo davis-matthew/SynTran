@@ -564,8 +564,10 @@ def verify(original_code_path, translated_code_path):
     try:
         mapping = cuda_to_openmp_func_mapping[os.path.splitext(os.path.basename(original_code_path))[0]]
         if mapping == ('', 0, 0):
+            print("\tterminate")
             return 'terminate', 'This function mapping is unimplemented and the translation cannot be verified'
     except:
+        print("\tterminate")
         return 'terminate', 'This function mapping is unimplemented and the translation cannot be verified'
     
     translated = ""
@@ -573,22 +575,25 @@ def verify(original_code_path, translated_code_path):
         translated = file.read()
 
     matches = re.findall(r'```(.*?)```', translated, re.DOTALL)
-    translated = matches[0]
-
+    
     if len(matches) < 1:
+        print("\tinvalid")
         return 'invalidgeneration', 'Code block not present in generated translation. Make sure you provide the code block and surround it with ```.'
 
+    translated = matches[0]
     replace_function_index(mapping, translated)
     
-    compilation_result = subprocess.run(['cd', os.path.dirname(mapping[0]), '&&', 'make','clean', '&&', 'make'])
+    compilation_result = subprocess.run(f"cd {os.path.abspath(os.path.dirname(mapping[0]))} && make clean && make", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if not compilation_result.returncode == 0:
         undo_function_replacement(mapping)
+        print("\tcompiler error")
         return 'compilererror', compilation_result.stderr
     
-    execution_result = subprocess.run(['cd', os.path.dirname(mapping[0]), '&&','make','run'], stderr=subprocess.STDOUT)
+    execution_result = subprocess.run(f"cd {os.path.abspath(os.path.dirname(mapping[0]))} && make run", shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
     if 'FAIL' in execution_result.stdout:
+        print("\ttranslation error")
         undo_function_replacement(mapping)
         return 'translationerror', execution_result.stdout
-    
+    print("\tsuccess")
     undo_function_replacement(mapping)
     return 'success', ':)'
