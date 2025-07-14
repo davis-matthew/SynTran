@@ -79,6 +79,7 @@ def load_model_on_gpu(chat_clients, config, gpu, llm):
                 messages=[{"role": "system", "content": "Initializing model"}]
             )
             if response:
+                print(response.text)
                 print(f"SUCCESS - loaded model {llm} on gpu {gpu}")
                 return True
             else:
@@ -94,6 +95,16 @@ def load_model_on_gpu(chat_clients, config, gpu, llm):
         time.sleep(0.5) # Prevent tight looping
 
 def preload_model(config, llm):
+    result = subprocess.run(
+        ["ollama", "list"],
+        capture_output=True,
+        text=True,
+        check=True
+    )
+    if llm not in result.stdout:
+        print(f"Pulling model {llm}")
+        subprocess.run(["ollama", "pull", llm], check=True)
+
     with concurrent.futures.ThreadPoolExecutor(max_workers=config['gpus']) as executor:
         futures = [executor.submit(load_model_on_gpu, config, gpu, llm) for gpu in range(config['gpus'])]
         concurrent.futures.wait(futures)

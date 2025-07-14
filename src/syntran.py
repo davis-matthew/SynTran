@@ -27,24 +27,25 @@ config = None
 task = None
 code = None
 chat_clients = None
+lock = threading.Lock()
 
 def preprocess(src):
     return sys.modules['preprocessor'].preprocess(src)
 
-def verify(original_code_path, translated_code_path):
-    return sys.modules['verifier'].verify(original_code_path, translated_code_path)
+def verify(thread_id, original_code_path, translated_code_path):
+    return sys.modules['verifier'].verify(thread_id, lock, original_code_path, translated_code_path)
 
-def save_translation(thread_id, problem_name, translation, attempts, status, current_task_time, current_thread_time):
-    output_path = f"{config['output']}/{problem_name}/Chat{thread_id}"
+def save_translation(llm, thread_id, problem_name, translation, attempts, status, current_task_time, current_thread_time):
+    output_path = f"{config['output']}/{llm}/{problem_name}"
     os.makedirs(output_path, exist_ok=True)
-    with open(f"{output_path}/Attempt{attempts}", 'w') as file:
+    with open(f"{output_path}/Chat{thread_id}/Attempt{attempts}", 'w') as file:
         file.write(translation)
     
     if status == 'success':
-        with open(f"{config['output']}/{problem_name}/solution", 'w') as file:
+        with open(f"{output_path}/solution", 'w') as file:
             file.write(translation)
     if status == 'terminate':
-        with open(f"{config['output']}/{problem_name}/terminated", 'w') as file:
+        with open(f"{output_path}/terminated", 'w') as file:
             file.write(translation)
 
 def translation_thread(
@@ -72,7 +73,7 @@ def generation_loop(
     feedback = src_code
     attempts = 0
     messages = [{"role": "system", "content": task['prompts']['system']}]
-    output_path = f"{config['output']}/{problem_name}/Chat{thread_id}"
+    output_path = f"{config['output']}/{llm}/{problem_name}/Chat{thread_id}"
     os.makedirs(output_path, exist_ok=True)
 
     while   not status == 'success' \
@@ -93,9 +94,9 @@ def generation_loop(
                 file.write(translation)
 
             generation_timestamp = time.time()
-            status, feedback = verify(src_file, f"{output_path}/temp_generation.txt")
+            status, feedback = verify(thread_id, src_file, f"{output_path}/temp_generation.txt")
             attempts += 1
-            save_translation(thread_id, problem_name, translation, attempts, status, generation_timestamp - task_start_time, generation_timestamp - thread_start_time)
+            save_translation(llm, thread_id, problem_name, translation, attempts, status, generation_timestamp - task_start_time, generation_timestamp - thread_start_time)
         
         except Exception as e:
             e = str(e)
@@ -159,7 +160,7 @@ def inference():
             restart_counts = {}
             print(f'Starting {problem_name} w/ LLM {llm}')
 
-            folder = pathlib.Path(f"{config['output']}/{problem_name}")
+            folder = pathlib.Path(f"{config['output']}/{llm}/{problem_name}")
             if not (args.recalculate_results is None or args.recalculate_results == 'none'):
                 if args.recalculate_results == 'all':
                     if folder.exists():
@@ -211,6 +212,6 @@ def inference():
             if successful:
                 print(f"Finished {problem_name}\n")
             else:
-                print("Unable to find a solution for the provided code")
+                print("Unable to find a solution for the provided code\n")
 
 inference()
