@@ -3,9 +3,10 @@ import os
 import subprocess
 import shutil
 
-def replace_function_index(mapping, new_code):
+def replace_function_index(thread_id, mapping, new_code):
+    backup_name = f'BACKUP{thread_id}'
     # Backup
-    shutil.copyfile(mapping[0], os.path.join(os.path.dirname(mapping[0]), 'BACKUP'))
+    shutil.copyfile(mapping[0], os.path.join(os.path.dirname(mapping[0]), backup_name))
     
     # Replace
     with open(mapping[0], 'r') as file:
@@ -14,9 +15,10 @@ def replace_function_index(mapping, new_code):
         #TODO: check these offsets not off by 1.
         file.write(content[:mapping[1]] + new_code + content[mapping[2]+1:])
 
-def undo_function_replacement(mapping):
-    shutil.copyfile(os.path.join(os.path.dirname(mapping[0]), 'BACKUP'), mapping[0])
-    os.remove(os.path.join(os.path.dirname(mapping[0]), 'BACKUP'))
+def undo_function_replacement(thread_id, mapping):
+    backup_name = f'BACKUP{thread_id}'
+    shutil.copyfile(os.path.join(os.path.dirname(mapping[0]), backup_name), mapping[0])
+    os.remove(os.path.join(os.path.dirname(mapping[0]), backup_name))
 
 cuda_to_openmp_func_mapping = {
     'deredundancy-kernel_createIndex6' : ('/home/mzu/SynTran/tasks/CUDA-to-OpenMP/benchmarks/HeCBench/src/deredundancy-omp/kernels.cpp', 4895, 6272),
@@ -560,7 +562,7 @@ cuda_to_openmp_func_mapping = {
     'ans-phase4_decode_write_output' : ('', 0, 0),
 }
 
-def verify(original_code_path, translated_code_path):
+def verify(thread_id, lock, original_code_path, translated_code_path):
     try:
         mapping = cuda_to_openmp_func_mapping[os.path.splitext(os.path.basename(original_code_path))[0]]
         if mapping == ('', 0, 0):
@@ -574,26 +576,32 @@ def verify(original_code_path, translated_code_path):
     with open(translated_code_path, 'r') as file:
         translated = file.read()
 
-    matches = re.findall(r'```(.*?)```', translated, re.DOTALL)
+    matches = re.findall(r'```(?:\w+\n)?(.*?)```', translated, re.DOTALL)
     
     if len(matches) < 1:
         print("\tinvalid")
         return 'invalidgeneration', 'Code block not present in generated translation. Make sure you provide the code block and surround it with ```.'
 
-    translated = matches[0]
-    replace_function_index(mapping, translated)
+    translated = matches[0].strip()
+    print(translated)
+    if '#pragma omp target' not in translated:
+        print("\tinvalid")
+        return 'invalidgeneration', 'Code block does not use OpenMP Target Offloading.'
+
+    with lock:
+        replace_function_index(thread_id, mapping, translated)
     
-    compilation_result = subprocess.run(f"cd {os.path.abspath(os.path.dirname(mapping[0]))} && make clean && make", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    if not compilation_result.returncode == 0:
-        undo_function_replacement(mapping)
-        print("\tcompiler error")
-        return 'compilererror', compilation_result.stderr
+        compilation_result = subprocess.run(f"cd {os.path.abspath(os.path.dirname(mapping[0]))} && CC=clang++ make clean && CC=clang++ make", shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if not compilation_result.returncode == 0:
+            undo_function_replacement(thread_id, mapping)
+            print("\tcompiler error")
+            return 'compilererror', compilation_result.stderr
     
-    execution_result = subprocess.run(f"cd {os.path.abspath(os.path.dirname(mapping[0]))} && make run", shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
-    if 'FAIL' in execution_result.stdout:
-        print("\ttranslation error")
-        undo_function_replacement(mapping)
-        return 'translationerror', execution_result.stdout
-    print("\tsuccess")
-    undo_function_replacement(mapping)
-    return 'success', ':)'
+        execution_result = subprocess.run(f"cd {os.path.abspath(os.path.dirname(mapping[0]))} && CC=clang++ make run", shell=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+        if 'FAIL' in execution_result.stdout:
+            print("\ttranslation error")
+            undo_function_replacement(thread_id, mapping)
+            return 'translationerror', execution_result.stdout
+        print("\tsuccess")
+        undo_function_replacement(thread_id, mapping)
+        return 'success', ':)'

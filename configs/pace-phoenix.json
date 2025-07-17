@@ -1,8 +1,0 @@
-{
-    "gpus"              : 2,
-    "attempts_per_chat" : 8,
-    "task_timeout"      : 1200,
-    "query_timeout"     : 120,
-    "temperature"       : 0.8,
-    "seed"              : 82
-}

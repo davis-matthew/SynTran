@@ -1,0 +1,17 @@
+{
+    "connection_timeout": 0,
+    
+    "gpus"              : 0,
+    "attempts_per_chat" : 0,
+    "max_attempts"      : 0,
+    "task_timeout"      : 0,
+    "query_timeout"     : 0,
+
+    "llms"              : ["llm1", "llm2"],
+    "temperature"       : 0.0,
+    "seed"              : 0,
+
+    "code"              : ["path/to/input", "path/to/input2"],
+
+    "output"            : "output/path"
+}

@@ -161,19 +161,23 @@ def inference():
             print(f'Starting {problem_name} w/ LLM {llm}')
 
             folder = pathlib.Path(f"{config['output']}/{llm}/{problem_name}")
-            if not (args.recalculate_results is None or args.recalculate_results == 'none'):
-                if args.recalculate_results == 'all':
-                    if folder.exists():
-                        shutil.rmtree(folder)
-                elif args.recalculate_results == 'terminated':
-                    if (folder / 'terminated').exists():
-                        shutil.rmtree(folder)
-                else:
-                    print("unrecognized recalculate results option... skipping")
-            else:
+            args.recalculate_results = args.recalculate_results or 'none'
+            if args.recalculate_results == 'none':
+                pass
+            elif args.recalculate_results == 'all':
                 if folder.exists():
-                    print(f"\t{problem_name} result already exists... skipping")
-                    continue
+                    shutil.rmtree(folder)
+            elif args.recalculate_results == 'failed':
+                if folder.exists() and not (folder / 'solution').exists():
+                    shutil.rmtree(folder)
+            else:
+                print(f"Unrecognized recalculate results option {args.recalculate_results}. Quitting")
+                exit(0)
+
+            if folder.exists():
+                print(f"{problem_name} result already exists... skipping\n")
+                continue
+
 
             with open(f"{config['output']}/current_problem.txt",'w') as file:
                 file.write(code_sample) 

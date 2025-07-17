@@ -1,0 +1,5 @@
+**/results/
+**/external/
+**/__pycache__/
+configs/
+nohup.out
