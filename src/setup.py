@@ -7,12 +7,13 @@ import concurrent
 import ollama
 import os
 import subprocess
+import httpx
 
 def parse_args():
     args = argparse.ArgumentParser(description="command-line flag parser")
     args.add_argument("--config", type=str, required=True, help="Path to config .json file")
     args.add_argument("--task", type=str, required=True, help="Path to task description .json file")
-    args.add_argument("--recalculate-results", type=str, default=None, help="all (solutions and terminated recalculated), failed (keep solutions, but retry terminated/crashed), none (keep any attempts present, run on any new files)")
+    args.add_argument("--recalculate-results", type=str, default=None, help="all (solutions and terminated recalculated), unsolved (keep solutions, but retry terminated/unsuccessful), failed (keep solutions & terminated, retry unsuccessful), none (keep any attempts present, run on any new files)")
     args = args.parse_args()
 
     return args
@@ -23,22 +24,30 @@ def load_config(config_path):
     return config
 
 def create_chat_clients(config):
-    return [None] * config['gpus']
+    clients = []
+    base_port = config.get('base_port', 11434)
+
+    for i in range(config['gpus']):
+        clients.append(ollama.Client(
+            host="http://127.0.0.1:" + str(base_port + i),
+            timeout = httpx.Timeout(
+                connect = config['ollama_connection_timeout'],
+                read = config['query_timeout'],
+                write = config['query_timeout'],
+                pool = config['ollama_connection_timeout']
+            )
+        ))
+    
+    return clients
 
 def load_task(task_path):
     with open(task_path, 'r') as file:
         task = json.load(file)
-    
-    for key in task['prompts']:
-        task['prompts'][key] = (
-            task['prompts'][key]
-            .replace('+SPEC_INPUT+', task['specifications']['input'])
-            .replace('+SPEC_OUTPUT+', task['specifications']['output'])
-        )
+
     return task
 
 def load_code(config):
-    code_paths = config['code']
+    code_paths = config['input']
     code = []
     config['code_paths'] = []
     for code_path in code_paths:
@@ -73,14 +82,13 @@ def load_model_on_gpu(chat_clients, config, gpu, llm):
     while True:
         try:
             print(f"initializing model {llm} on {base_port+gpu}")
-            chat_clients[gpu] = ollama.Client(host="http://localhost:"+str(base_port+gpu), timeout = config['connection_timeout'])
             response = chat_clients[gpu].chat(
-                model=llm, 
-                messages=[{"role": "system", "content": "Initializing model"}]
+                model = llm[0], 
+                options = {'temperature' : llm[1]}, 
+                messages=[{"role": "user", "content": "Hello World"}]
             )
             if response:
-                print(response.text)
-                print(f"SUCCESS - loaded model {llm} on gpu {gpu}")
+                print(f"SUCCESS - loaded model {llm[0]} w/ temperature {llm[1]} on gpu {gpu}")
                 return True
             else:
                 print(f"ERROR - failed to load model on gpu")
@@ -92,20 +100,22 @@ def load_model_on_gpu(chat_clients, config, gpu, llm):
                 os.environ.pop("https_proxy", None)
             else:
                 print(f"ERROR - failed to load model on gpu (could not send request) - {e}")
-        time.sleep(0.5) # Prevent tight looping
+        time.sleep(0.5)
 
-def preload_model(config, llm):
+def preload_model(clients, config, llm):
     result = subprocess.run(
         ["ollama", "list"],
         capture_output=True,
         text=True,
         check=True
     )
-    if llm not in result.stdout:
-        print(f"Pulling model {llm}")
-        subprocess.run(["ollama", "pull", llm], check=True)
+    
+    if llm[0] not in result.stdout:
+        print(f"Pulling model {llm[0]}")
+        subprocess.run(["ollama", "pull", llm[0]], check=True)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=config['gpus']) as executor:
-        futures = [executor.submit(load_model_on_gpu, config, gpu, llm) for gpu in range(config['gpus'])]
+        futures = [executor.submit(load_model_on_gpu, clients, config, gpu, llm) for gpu in range(config['gpus'])]
         concurrent.futures.wait(futures)
-    print("Model loaded on GPUs")
+    
+    print(f"Model {llm[0]} loaded on GPUs")
