@@ -14,8 +14,8 @@ find "$ROOT_DIR" -type d -name '*-omp' | while read -r dir; do
   if [ -f "$MAKEFILE" ]; then
     echo "Processing $MAKEFILE"
     sed -i \
-      -e 's/\bicpc\b/clang++/g' \
-      -e 's/\bicpx\b/clang++/g' \
+      -e 's/\bicpc\b/g++/g' \
+      -e 's/\bicpx\b/g++/g' \
       -e 's/-fopenmp-targets=[^[:space:]]*//g' \
       -e 's/-qnextgen//g' \
       -e 's/-fiopenmp/-fopenmp/g' \

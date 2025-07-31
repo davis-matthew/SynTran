@@ -148,7 +148,6 @@ def generation_loop(state, src_code, stop_event):
                 exit(1)
             
             state['generation_attempt'] += 1
-
             if generation_result == 'terminate':
                 terminate = True
                 break
@@ -227,6 +226,10 @@ def generation_loop(state, src_code, stop_event):
         if terminate:
             break
 
+    if terminate:
+        stop_event.set()
+        print("attempt terminated")
+        
     return verification_success
 
 def finetune():
@@ -292,7 +295,7 @@ def inference():
             with concurrent.futures.ThreadPoolExecutor(max_workers=config['gpus']) as executor:
                 futures = {}
 
-                while time.time() - start_time < config['task_timeout']:
+                while time.time() - start_time < config['task_timeout'] and not stop_event.is_set():
                     # Restart unsuccessful threads who reached attempt max
                     for future in list(futures):
                         if future.done():

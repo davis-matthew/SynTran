@@ -11,19 +11,25 @@
 
             "no_openmp_target_offloading" : "+FEEDBACK+ Please retry generation. Here is the original code to translate to OpenMP Target Offloading:\n```+SRC_CODE```",
 
+            "success" : "Success! +FEEDBACK+",
+
             "system-old" : "You are a programming model translation expert which will translate functions written in CUDA C++ to equivalent functions using OpenMP Target Offloading. Here is a guide covering the most important concepts of the CUDA C++ programming model:\n===START OF GUIDE===\n+SPEC_INPUT+\n===END OF GUIDE===\nHere is a guide covering the most important concepts of the OpenMP programming model:\n===START OF GUIDE===\n+SPEC_OUTPUT+\n===END OF GUIDE===\nYou will receive a CUDA C++ kernel program. Your objective is to rewrite the CUDA kernels as functions using OpenMP offloading instead. This translation should preserve the semantics and parallelism of the code as best as possible. Carefully consider the provided CUDA code and determine the OpenMP statements that are most faithful to the original and are cleanly written for ease of adoption. Your OpenMP code should be compilable and runnable, such that testcases written on the original code will verify that the translated code has equivalent behavior. The original CUDA code is assumed to be perfect in the sense that you should not try and fix or alter the intent, variable names, etc., during translation to OpenMP. Please also comment the translated code with helpful information that explains the result code behavior. Your response should be split into two sections:\n- An analysis section, which very briefly describes the thought process behind the translation. This is most important for translation of functions that are not trivially understandable. This section should also describe at a high level why you are certain the translation is valid, and any concerns you have regarding the translated code.\n- A final output section, which only contains the final OpenMP function. This is the original source code with exclusively the CUDA kernel swapped for your translated OpenMP function and related comments. Make sure that this is within a codeblock, starting with ``` and a newline and ending in ```. Please do not include any test code or anything extra in your codeblock, just the raw translation of the kernel function. Keep the function name the exact same. Do not include #includes or anything outside of the function, assume that they are imported. Never add other content to your final output, such as non-source-code text. Rigorous source code checks and test cases will determine the difference between the provided code and your translation attempts. Modifying the original code in any way besides translation of the CUDA kernel is STRICTLY FORBIDDEN, and will be detected and rejected."
         },
         "syntactic_repair" : {
 
             "system"        : "You are a code syntax repair expert. You will be provided the code and the error message. Use the error information to repair the code and fix the error.",
             
-            "compilererror" : "The following OpenMP Target Offloading code is uncompilable. Please repair the code to compile correctly.\nCode:\n+GENERATION+\nCompiler Output:\n+FEEDBACK+"
+            "compilererror" : "The following OpenMP Target Offloading code is uncompilable. Please repair the code to compile correctly.\nCode:\n+GENERATION+\nCompiler Output:\n+FEEDBACK+",
+
+            "success" : "Success! +FEEDBACK+"
         },
         "semantic_repair" : {
             
             "system"        : "You are an expert at fixing logical errors in code. You will be provided the original code written in CUDA C++ and the attempt at recreating the code using OpenMP Target Offloading. Identify any logical issues and correct the OpenMP Target Offloading code.",
             
-            "testerror"     : "The following OpenMP Target Offloading code fails tests that ensure that the behavior of the code is equivalent to a correct implementation written in CUDA C++.\nOriginal Code:+SRC_CODE+\nOpenMP Code:+GENERATION+\nFeedback:+FEEDBACK+"
+            "testerror"     : "The following OpenMP Target Offloading code fails tests that ensure that the behavior of the code is equivalent to a correct implementation written in CUDA C++.\nOriginal Code:+SRC_CODE+\nOpenMP Code:+GENERATION+\nFeedback:+FEEDBACK+",
+
+            "success" : "Success! +FEEDBACK+"
         }
     },
     "specifications" : 

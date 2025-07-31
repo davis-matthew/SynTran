@@ -30,12 +30,13 @@ def create_chat_clients(config):
     for i in range(config['gpus']):
         clients.append(ollama.Client(
             host="http://127.0.0.1:" + str(base_port + i),
-            timeout = httpx.Timeout(
-                connect = config['ollama_connection_timeout'],
-                read = config['query_timeout'],
-                write = config['query_timeout'],
-                pool = config['ollama_connection_timeout']
-            )
+            # timeout = httpx.Timeout(
+            #     connect = config['ollama_connection_timeout'],
+            #     read = config['query_timeout'],
+            #     write = config['query_timeout'],
+            #     pool = config['ollama_connection_timeout']
+            # )
+            timeout = None
         ))
     
     return clients
