@@ -1,6 +1,32 @@
 import os
 import shutil
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from tqdm import tqdm
 import sys
+
+def process_file(file_path):
+    with open(file_path, 'r', encoding='utf-8', errors='replace') as file:
+        lines = file.readlines()
+
+    relevant_lines = []
+    seq_values = []
+    contains_formula = False
+    
+    for line in lines:
+        if '%F' in line:
+            contains_formula = True
+        if line.startswith(('%I', '%S', '%T', '%N', '%U', '%F', '%p', '%t', '%o')):
+            relevant_lines.append(line)
+        if line.startswith(('%S', '%T', '%U')):
+            seq_values.extend([int(x) for x in line.split()[2].rstrip(',').split(',')])
+    
+        
+    num_distinct_values = len(set(seq_values))
+
+    # Save relevant lines to a new file
+    if not contains_formula or num_distinct_values < 10:
+        os.remove(file_path)
+    return True
 
 if len(sys.argv) < 2:
     print("Usage: python strip_database.py <path/to/oeisdata/repo>")
@@ -8,11 +34,8 @@ if len(sys.argv) < 2:
     
 root = sys.argv[1]
 
-# List of files and directories to remove
-items_to_remove = ["files", ".gitattributes", ".lfsconfig", "LICENSE", "README.md", "time.txt"]
-
-# Remove the specified files and directories
-for item_name in items_to_remove:
+# Delete all spurious files
+for item_name in ["files", ".gitattributes", ".lfsconfig", "LICENSE", "README.md", "time.txt"]:
     item_path = os.path.join(root, item_name)
     if os.path.exists(item_path):
         if os.path.isfile(item_path):
@@ -22,35 +45,33 @@ for item_name in items_to_remove:
             shutil.rmtree(item_path)
             print(f"Removed directory {item_name}")
 
-# Function to parse and process files
-def process_file(file_path):
-    with open(file_path, 'r', encoding='utf-8', errors='replace') as file:
-        lines = file.readlines()
+seq_root = os.path.join(root, 'seq')
 
-    relevant_lines = []
-    contains_formula = False
-    for line in lines:
-        if '%F' in line:
-            contains_formula = True
-        if line.startswith(('%I', '%S', '%T', '%N', '%U', '%F', '%p', '%t', '%o')):
-            relevant_lines.append(line)
-
-    # Save relevant lines to a new file
-    if contains_formula:
-        with open(file_path, 'w', encoding='utf-8') as new_file:
-            new_file.writelines(relevant_lines)
-        return True
-    return False
-
-root = os.path.join(root, 'seq')
-# Traverse through directories
-for dir_name in os.listdir(root):
-    dir_path = os.path.join(root, dir_name)
+# Move all files from the subdirectory to the parent directory
+for dir_name in os.listdir(seq_root):
+    dir_path = os.path.join(seq_root, dir_name)
     if os.path.isdir(dir_path):
-        # Move all files from the subdirectory to the parent directory
         for file_name in os.listdir(dir_path):
             file_path = os.path.join(dir_path, file_name)
             if os.path.isfile(file_path):
-                if process_file(file_path):
-                    shutil.move(file_path, root)
-        shutil.rmtree(dir_path)
+                target_path = os.path.join(root, file_name)
+                shutil.move(file_path, target_path)
+
+file_paths = [
+    entry.path for entry in os.scandir(root)
+    if entry.is_file()
+]
+
+original_length = len(file_paths)
+
+with ThreadPoolExecutor() as executor:
+    futures = {executor.submit(process_file, fp): fp for fp in file_paths}
+    for _ in tqdm(as_completed(futures), total=len(futures), desc="Processing files"):
+        pass  # progress is updated for each completed file
+
+file_paths = [
+    entry.path for entry in os.scandir(root)
+    if entry.is_file()
+]
+reduced_length = len(file_paths)
+print(f"Stripped database from {original_length} -> {reduced_length} entries")

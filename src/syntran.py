@@ -67,7 +67,7 @@ def query(state, query_type, messages):
 def save_translation(state, src_code, generation, verification_success, result, feedback):
     output_path = f"{config['output']}/{generate_llm_triple_string(state['llm_triple'])}/{state['problem_name']}"
     os.makedirs(output_path, exist_ok=True)
-    os.makedirs(f'{output_path}/Chat{state['thread_id']}', exist_ok=True)
+    os.makedirs(f"{output_path}/Chat{state['thread_id']}", exist_ok=True)
     with open(f"{output_path}/Chat{state['thread_id']}/Attempt{state['overall_attempt']}-{state['generation_attempt']}-{state['semantic_repair_attempt']}-{state['syntactic_repair_attempt']}", 'w') as file:
         file.write(generation + "\n\n\n---Feedback---\n" + feedback)
     
@@ -135,7 +135,7 @@ def generation_loop(state, src_code, stop_event):
             try:
                 generation = query(state, 'generation', messages)                
                 messages.append({'role': 'assistant', 'content': generation})
-                verification_success, generation_result, feedback = verify_generation(state, src_code, lock, generation)
+                verification_success, generation_result, feedback = verify_generation(state, lock, src_code, generation)
                 save_translation(state, src_code, generation, verification_success, generation_result, feedback)
                 
             except Exception as e:
@@ -206,7 +206,7 @@ def generation_loop(state, src_code, stop_event):
             if terminate or restart_attempt:
                 break
 
-            verification_success, semantic_repair_result, feedback = verify_semantics(state, src_code, generation)
+            verification_success, semantic_repair_result, feedback = verify_semantics(state, lock, src_code, generation)
             messages = [{'role': 'user', 'content': prompt_variable_replacement(task['prompts']['semantic_repair'][semantic_repair_result], src_code, generation, feedback)}]
             save_translation(state, src_code, generation, verification_success, generation_result, feedback)
             

@@ -70,8 +70,10 @@ def load_components(module_name, file_name):
 
 def init_preprocessor(task_dir):
     load_components('preprocessor',f'{task_dir}/preprocess.py')
+    #return sys.modules['preprocessor'].init()
 def init_verifier(task_dir):
     load_components('verifier',f'{task_dir}/verify.py')
+    #return sys.modules['verifier'].init()
 
 def init_ollama(config):
     subprocess.run(['./start_ollama.sh', config], cwd=os.path.dirname(os.path.abspath(__file__)))
