@@ -47,19 +47,27 @@ def load_task(task_path):
 
     return task
 
+import os
+
 def load_code(config):
     code_paths = config['input']
     code = []
     config['code_paths'] = []
+
     for code_path in code_paths:
-        temp = [code_path]
+        temp_paths = []
+
         if os.path.isdir(code_path):
-            temp = (os.path.join(code_path,f) for f in os.listdir(code_path) if os.path.isfile(os.path.join(code_path, f)))
-        
-        for path in temp:
+            with os.scandir(code_path) as entries:
+                temp_paths = [entry.path for entry in entries if entry.is_file()]
+        else:
+            temp_paths = [code_path]
+
+        for path in temp_paths:
             config['code_paths'].append(path)
             with open(path, 'r') as file:
                 code.append(file.read())
+
     return code
 
 def load_components(module_name, file_name):

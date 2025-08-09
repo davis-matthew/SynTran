@@ -1,0 +1,24 @@
+{
+    "gpus"                              : 1,
+    "ollama_connection_timeout"         : 150,
+    "seed"                              : 82,
+    "base_port"                         : 11436,
+    
+    "task_timeout"                      : 300,
+    "query_timeout"                     : 30,
+
+    "chat_generation_attempts"          : 3,
+    "chat_syntactic_repair_attempts"    : 3, 
+    "chat_semantic_repair_attempts"     : 3,
+
+    "llms" : [
+        {
+            "generation"                : ["qwen2.5-coder:14b-instruct",    0.7],
+            "syntactic_repair"          : ["qwen2.5-coder:14b-instruct",    0.7],
+            "semantic_repair"           : ["qwen2.5-coder:14b-instruct",    0.7]
+        }
+    ],
+
+    "input"                             : ["/storage/home/hcoda1/7/mdavis438/GANESH-SHARED/OEIS/batch_2"],
+    "output"                            : "/storage/home/hcoda1/7/mdavis438/GANESH-SHARED/SynTran/tasks/OEIS-to-C/results"
+}

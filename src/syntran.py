@@ -287,8 +287,8 @@ def inference():
                 continue
 
 
-            with open(f"{config['output']}/current_problem.txt",'w') as file:
-                file.write(code_sample) 
+            # with open(f"{config['output']}/current_problem.txt",'w') as file:
+            #     file.write(code_sample) 
             
             successful = False
             start_time = time.time()
