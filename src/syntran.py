@@ -8,6 +8,7 @@ import setup
 import traceback
 import pathlib
 import shutil
+import json
 
 # Syntran Design:
 #
@@ -62,6 +63,8 @@ def query(state, query_type, messages):
         messages = messages
     )
     state['query_timestamp'] = time.time()
+    state['stats']['queries'] += 1
+    state['stats'][query_type + 's'] += 1
     return response.message.content
 
 def save_translation(state, src_code, generation, verification_success, result, feedback):
@@ -77,6 +80,86 @@ def save_translation(state, src_code, generation, verification_success, result, 
     if result == 'terminate':
         with open(f"{output_path}/terminated", 'w') as file:
             file.write(generation + "\n\n\n---Feedback---\n" + feedback)
+
+def save_stats(state):
+    output_path = f"{config['output']}/{generate_llm_triple_string(state['llm_triple'])}/{state['problem_name']}"
+    os.makedirs(output_path, exist_ok=True)
+    os.makedirs(f"{output_path}/Chat{state['thread_id']}", exist_ok=True)
+    with open(f"{output_path}/Chat{state['thread_id']}/stats") as file:
+        json.dump(state['stats'], file, indent=4)
+
+def combine_stats(folder_path):
+    combined = {}
+
+    def merge_dicts(d1, d2):
+        for key, value in d2.items():
+            if key not in d1:
+                d1[key] = initialize_value(value)
+            else:
+                d1[key] = merge_values(d1[key], value)
+
+    def initialize_value(value):
+        if isinstance(value, dict):
+            return {k: initialize_value(v) for k, v in value.items()}
+        elif isinstance(value, list):
+            return value.copy()
+        elif isinstance(value, (int, float)):
+            return value
+        elif isinstance(value, str):
+            return [value]
+        elif isinstance(value, bool):
+            return {'true_count': int(value), 'total_count': 1}
+        elif value is None:
+            return None
+        else:
+            return value  # fallback
+
+    def merge_values(existing, new):
+        if isinstance(existing, dict) and isinstance(new, dict):
+            merge_dicts(existing, new)
+            return existing
+        elif isinstance(existing, list) and isinstance(new, list):
+            return existing + new
+        elif isinstance(existing, (int, float)) and isinstance(new, (int, float)):
+            return existing + new
+        elif isinstance(existing, list) and isinstance(new, str):
+            return existing + [new]
+        elif isinstance(existing, str) and isinstance(new, str):
+            return [existing, new]
+        elif isinstance(existing, dict) and 'true_count' in existing and 'total_count' in existing:
+            # Boolean merge
+            existing['true_count'] += int(new)
+            existing['total_count'] += 1
+            return existing
+        elif new is None:
+            return existing
+        else:
+            return existing  # fallback
+
+    for root, _, files in os.walk(folder_path):
+        for file in files:
+            if file == 'stats':
+                file_path = os.path.join(root, file)
+                try:
+                    with open(file_path, 'r') as f:
+                        data = json.load(f)
+                        merge_dicts(combined, data)
+                except Exception as e:
+                    print(f"Error reading {file_path}: {e}")
+
+    # Convert boolean counters to string format
+    def finalize_booleans(d):
+        for key, value in d.items():
+            if isinstance(value, dict):
+                if 'true_count' in value and 'total_count' in value:
+                    d[key] = f"{value['true_count']} / {value['total_count']}"
+                else:
+                    finalize_booleans(value)
+
+    finalize_booleans(combined)
+
+    with open(f"{folder_path}/stats", 'w') as file:
+        json.dump(combined, file, indent=4)
 
 def translation_thread(
         thread_id, 
@@ -94,10 +177,18 @@ def translation_thread(
             'thread_id'         : thread_id,
             'llm_triple'        : llm_triple,
             'task_start_time'   : task_start_time,
-            'thread_start_time' : thread_start_time
+            'thread_start_time' : thread_start_time,
+
+            'stats' : {
+                'generations' : 0,
+                'syntactic_repairs' : 0,
+                'semantic_repairs' : 0,
+                'queries' : 0
+            }
         }
 
         generation_successful = generation_loop(state, src_code, stop_event)
+        save_stats(state)
         if generation_successful:
             stop_event.set()
             return True
@@ -133,7 +224,7 @@ def generation_loop(state, src_code, stop_event):
             messages.append({'role': 'user', 'content': prompt_variable_replacement(task['prompts']['generation'][generation_result], src_code, generation, feedback)})
             
             try:
-                generation = query(state, 'generation', messages)                
+                generation = query(state, 'generation', messages)
                 messages.append({'role': 'assistant', 'content': generation})
                 verification_success, generation_result, feedback = verify_generation(state, lock, src_code, generation)
                 save_translation(state, src_code, generation, verification_success, generation_result, feedback)
@@ -317,5 +408,7 @@ def inference():
                 print(f"Finished {problem_name}\n")
             else:
                 print("Unable to find a solution for the provided code\n")
+            
+            combine_stats(folder)
 
 inference()

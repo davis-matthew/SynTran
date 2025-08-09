@@ -47,7 +47,7 @@ def replace_function_index(thread_id, mapping, new_code):
     shutil.copyfile(mapping[0], os.path.join(os.path.dirname(mapping[0]), backup_name))
     
     # Replace
-    with open(mapping[0], 'r') as file:
+    with open(mapping[0], 'r',encoding='utf-8', errors='replace') as file:
         content = file.read()
     with open(mapping[0], 'w') as file:
         #TODO: check these offsets not off by 1.
