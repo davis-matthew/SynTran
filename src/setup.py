@@ -114,16 +114,21 @@ def load_model_on_gpu(chat_clients, config, gpu, llm):
         time.sleep(0.5)
 
 def preload_model(clients, config, llm):
+    port = config.get('base_port', 11434)
+    env = os.environ.copy()
+    env["OLLAMA_HOST"] = f"127.0.0.1:{port}"
+
     result = subprocess.run(
         ["ollama", "list"],
         capture_output=True,
         text=True,
-        check=True
+        check=True,
+        env=env
     )
     
     if llm[0] not in result.stdout:
         print(f"Pulling model {llm[0]}")
-        subprocess.run(["ollama", "pull", llm[0]], check=True)
+        subprocess.run(["ollama", "pull", llm[0]], check=True,env=env)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=config['gpus']) as executor:
         futures = [executor.submit(load_model_on_gpu, clients, config, gpu, llm) for gpu in range(config['gpus'])]

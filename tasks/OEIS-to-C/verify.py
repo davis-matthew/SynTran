@@ -1,13 +1,12 @@
 import subprocess
 import re
 
-def check_compilation(thread_id, code):
-    with open(f'temp_generated_code{thread_id}.cpp', "w") as file:
+def check_compilation(problem_name, thread_id, code):
+    with open(f'temp_{problem_name}_{thread_id}.cpp', "w") as file:
         file.write(code)
     
-    compile_output = subprocess.run(['g++', f'temp_generated_code{thread_id}.cpp', '-o', f'temp_executable_{thread_id}'],capture_output = True, text=True)
+    compile_output = subprocess.run(['g++', f'temp_{problem_name}_{thread_id}.cpp', '-o', f'temp_{problem_name}_executable_{thread_id}'],capture_output = True, text=True)
     if not compile_output.returncode == 0:
-        print("\tcompiler error")
         return False, 'compilererror', compile_output.stderr
     return True, 'success', ''
 
@@ -49,22 +48,23 @@ def check_sequence(seq_values, runtime_values):
 
     return ("NONE",-1)
 
-def check_generated_code(thread_id, seq_values, generated_code):
-    with open('temp_generated_code.cpp', "w") as file:
+def check_generated_code(problem_name, thread_id, seq_values, generated_code):
+    with open(f'temp_{problem_name}_{thread_id}.cpp', "w") as file:
         file.write(generated_code)
     
-    compile_output = subprocess.run(['g++', 'temp_generated_code.cpp', '-o', f'temp_executable_{thread_id}'],capture_output = True, text=True)
+    compile_output = subprocess.run(['g++', f'temp_{problem_name}_{thread_id}.cpp', '-o', f'temp_{problem_name}_executable_{thread_id}'],capture_output = True, text=True)
     
     try:
-        runtime_output = subprocess.run([f'./temp_executable_{thread_id}'], capture_output=True, text=True, timeout=1000)
+        runtime_output = subprocess.run([f'./temp_{problem_name}_executable_{thread_id}'], capture_output=True, text=True, timeout=120)
     except subprocess.TimeoutExpired:
         return False, 'terminate', 'Code took too long to verify'
     
     if not runtime_output.returncode == 0: # FIXME: doesn't print stderr?
-        print("\truntime error")
         return False, 'runtimeerror', runtime_output.stderr
     
     runtime_values = [int(value.strip()) for value in runtime_output.stdout.splitlines() if value.strip().isnumeric()]
+    if len(seq_values) == 0:
+        return False, 'sequencemismatch', f'Your sequence did not properly return values. Make sure your code returns the following values that match the OEIS sequence: \n\t{get_print_form(seq_values)}'
     
     result, offset = check_sequence(seq_values, runtime_values)
     if result == 'COMPLETE':
@@ -87,7 +87,10 @@ def verify_generation(state, lock, src_code, generation):
 def verify_syntax(state, lock, src_code, generation):
     matches = re.findall(r'```(?:\w+\n)?(.*?)```', generation, re.DOTALL)
     
-    generated_function = matches[0].strip()
+    try:
+        generated_function = matches[0].strip()
+    except:
+        return False, 'compilererror', 'unable to find codeblock'
 
     with open(state['src_file'], 'r') as file:
         lines = file.readlines()
@@ -105,12 +108,12 @@ def verify_syntax(state, lock, src_code, generation):
 
         int main() {
             for(int i = 0 ; i <''' +str(seq_length) + '''; i++){
-                '''+seq_name+'''(i);
+                std::cout << '''+seq_name+'''(i) << "\\n";
             }
         }
         '''
     
-    return check_compilation(state['thread_id'], runner_code)
+    return check_compilation(state['problem_name'], state['thread_id'], runner_code)
 
 def verify_semantics(state, lock, src_code, generation):
     with open(state['src_file'], 'r') as file:
@@ -126,16 +129,19 @@ def verify_semantics(state, lock, src_code, generation):
     
     matches = re.findall(r'```(?:\w+\n)?(.*?)```', generation, re.DOTALL)
 
-    generated_function = matches[0].strip()
+    try:
+        generated_function = matches[0].strip()
+    except:
+        return False, 'runtimeerror', 'missing codeblock'
 
     runner_code = '''#include <iostream>
     '''+ generated_function +'''
 
         int main() {
             for(int i = 0 ; i <''' +str(seq_length) + '''; i++){
-                '''+seq_name+'''(i);
+                std::cout << '''+seq_name+'''(i) << "\\n";
             }
         }
         '''
 
-    return check_generated_code(state['thread_id'], seq_values, runner_code)
+    return check_generated_code(state['problem_name'], state['thread_id'], seq_values, runner_code)

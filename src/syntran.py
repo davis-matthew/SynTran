@@ -73,10 +73,7 @@ def save_translation(state, src_code, generation, verification_success, result, 
     os.makedirs(f"{output_path}/Chat{state['thread_id']}", exist_ok=True)
     with open(f"{output_path}/Chat{state['thread_id']}/Attempt{state['overall_attempt']}-{state['generation_attempt']}-{state['semantic_repair_attempt']}-{state['syntactic_repair_attempt']}", 'w') as file:
         file.write(generation + "\n\n\n---Feedback---\n" + feedback)
-    
-    if verification_success == 'success':
-        with open(f"{output_path}/solution", 'w') as file:
-            file.write(generation + "\n\n\n---Feedback---\n" + feedback)
+
     if result == 'terminate':
         with open(f"{output_path}/terminated", 'w') as file:
             file.write(generation + "\n\n\n---Feedback---\n" + feedback)
@@ -85,7 +82,7 @@ def save_stats(state):
     output_path = f"{config['output']}/{generate_llm_triple_string(state['llm_triple'])}/{state['problem_name']}"
     os.makedirs(output_path, exist_ok=True)
     os.makedirs(f"{output_path}/Chat{state['thread_id']}", exist_ok=True)
-    with open(f"{output_path}/Chat{state['thread_id']}/stats") as file:
+    with open(f"{output_path}/Chat{state['thread_id']}/stats", 'w') as file:
         json.dump(state['stats'], file, indent=4)
 
 def combine_stats(folder_path):
@@ -300,8 +297,13 @@ def generation_loop(state, src_code, stop_event):
             messages = [{'role': 'user', 'content': prompt_variable_replacement(task['prompts']['semantic_repair'][semantic_repair_result], src_code, generation, feedback)}]
             save_translation(state, src_code, generation, verification_success, generation_result, feedback)
             
-            if verification_success:
-                break
+            if verification_success:    
+                output_path = f"{config['output']}/{generate_llm_triple_string(state['llm_triple'])}/{state['problem_name']}"
+                os.makedirs(output_path, exist_ok=True)
+                with open(f"{output_path}/solution", 'w') as file:
+                    file.write(generation + "\n\n\n---Feedback---\n" + feedback)
+                
+                return True
             
             if semantic_repair_result == 'terminate':
                 terminate = True
@@ -384,10 +386,9 @@ def inference():
             successful = False
             start_time = time.time()
             with concurrent.futures.ThreadPoolExecutor(max_workers=config['gpus']) as executor:
-                futures = {}
-
+                futures = {executor.submit(translation_thread, i, llm_triple, problem_name, code_file, code_sample, start_time, time.time(), stop_event): i for i in range(config['gpus'])}
+                
                 while time.time() - start_time < config['task_timeout'] and not stop_event.is_set():
-                    # Restart unsuccessful threads who reached attempt max
                     for future in list(futures):
                         if future.done():
                             if future.result(): # Successful translation
@@ -397,9 +398,6 @@ def inference():
                     if successful:
                         break
 
-                    # Start up initial threads
-                    if not futures:
-                        futures = {executor.submit(translation_thread, i, llm_triple, problem_name, code_file, code_sample, start_time, time.time(), stop_event): i for i in range(config['gpus'])}
                     time.sleep(0.1)  # Prevent tight looping
 
                 stop_event.set()

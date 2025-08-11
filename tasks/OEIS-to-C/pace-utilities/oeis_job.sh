@@ -7,12 +7,14 @@
 #SBATCH --ntasks=1                 # Number of tasks
 #SBATCH --nodes=1
 #SBATCH --cpus-per-task=1          # CPUs per task
-#SBATCH --time=12:00:00            # Time limit (HH:MM:SS)
+#SBATCH --time=24:00:00            # Time limit (HH:MM:SS)
 #SBATCH --mem=16G                   # Total memory
 #SBATCH --account=gts-vganesh45-paid
 
 module load ollama
 
 echo "OEIS Sequence Batch $1"
+
+cd /storage/home/hcoda1/7/mdavis438/temp$i
 
 python3 /storage/home/hcoda1/7/mdavis438/GANESH-SHARED/SynTran/src/syntran.py --task /storage/home/hcoda1/7/mdavis438/GANESH-SHARED/SynTran/tasks/OEIS-to-C/description.json --config /storage/home/hcoda1/7/mdavis438/GANESH-SHARED/SynTran/tasks/OEIS-to-C/pace-utilities/oeis-phoenix-$1.json --recalculate-results none
