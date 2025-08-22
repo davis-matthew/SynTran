@@ -1,0 +1,30 @@
+{
+    "prompts" : 
+    {
+        "generation" : {
+
+            "system"                        : "You will translate code written in SRC to code in TARGET. A specification for SRC is provided:\n+SPEC_INPUT+\nA specification for TARGET is provided:\n+SPEC_OUTPUT+",
+
+            "initial_generation"            : "Please perform translation of the following code from SRC to TARGET:\n```+SRC_CODE+```",
+            
+            "invalid_generation_reason_1"   : "Generation Failed due to Reason 1. Here is the verifier feedback:\n +FEEDBACK+"
+        },
+        "syntactic_repair" : {
+
+            "system"            : "You will be provided code that has a syntax error and the error message. Use the error information to repair the code and fix the error",
+            
+            "syntax_error_1"    : "The following code failed a syntax check with error ERROR 1.\n```+GENERATION+```\nHere is the error message:\n+FEEDBACK+"
+        },
+        "semantic_repair" : {
+            
+            "system"            : "You will be provided code that is semantically incorrect and a list of code behavior expectations. Using the expectations and information about which was violated, repair the code",
+            
+            "semantic_error_1"  : "The following code failed semantic expectations.\n```+GENERATION+```\n Repair the following error in the code:\n+FEEDBACK+"
+        }
+    },
+    "specifications" : 
+    {
+        "input" : "The SRC programming model allows for X through the syntax etc.",
+        "output" : "The TARGET programming model is ..." 
+    }
+}

@@ -74,10 +74,6 @@ def save_translation(state, src_code, generation, verification_success, result, 
     with open(f"{output_path}/Chat{state['thread_id']}/Attempt{state['overall_attempt']}-{state['generation_attempt']}-{state['semantic_repair_attempt']}-{state['syntactic_repair_attempt']}", 'w') as file:
         file.write(generation + "\n\n\n---Feedback---\n" + feedback)
 
-    if result == 'terminate':
-        with open(f"{output_path}/terminated", 'w') as file:
-            file.write(generation + "\n\n\n---Feedback---\n" + feedback)
-
 def save_stats(state):
     output_path = f"{config['output']}/{generate_llm_triple_string(state['llm_triple'])}/{state['problem_name']}"
     os.makedirs(output_path, exist_ok=True)
@@ -211,7 +207,7 @@ def generation_loop(state, src_code, stop_event):
         # Initial Generation
         state['generation_attempt'] = 0        
         messages = [{'role': 'system',  'content': prompt_variable_replacement(task['prompts']['generation']['system'], src_code, generation)}]
-        generation_result = 'generation'
+        generation_result = 'initial_generation'
 
         while True:
             if state['generation_attempt'] >= config['chat_generation_attempts']:
@@ -275,9 +271,6 @@ def generation_loop(state, src_code, stop_event):
                     break
                 
                 verification_success, syntactic_repair_result, feedback = verify_syntax(state, lock, src_code, generation)
-                messages.append({'role': 'user', 'content': prompt_variable_replacement(task['prompts']['syntactic_repair'][syntactic_repair_result], src_code, generation, feedback)})
-                save_translation(state, src_code, generation, verification_success, generation_result, feedback)
-                
                 if verification_success:
                     break
 
@@ -285,6 +278,9 @@ def generation_loop(state, src_code, stop_event):
                     terminate = True
                     break
 
+                messages.append({'role': 'user', 'content': prompt_variable_replacement(task['prompts']['syntactic_repair'][syntactic_repair_result], src_code, generation, feedback)})
+                save_translation(state, src_code, generation, verification_success, generation_result, feedback)
+                
                 generation = query(state, 'syntactic_repair', messages)
                 messages.append({'role': 'assistant', 'content' : generation})
                 state['syntactic_repair_attempt'] += 1
@@ -294,9 +290,6 @@ def generation_loop(state, src_code, stop_event):
                 break
 
             verification_success, semantic_repair_result, feedback = verify_semantics(state, lock, src_code, generation)
-            messages = [{'role': 'user', 'content': prompt_variable_replacement(task['prompts']['semantic_repair'][semantic_repair_result], src_code, generation, feedback)}]
-            save_translation(state, src_code, generation, verification_success, generation_result, feedback)
-            
             if verification_success:    
                 output_path = f"{config['output']}/{generate_llm_triple_string(state['llm_triple'])}/{state['problem_name']}"
                 os.makedirs(output_path, exist_ok=True)
@@ -309,6 +302,9 @@ def generation_loop(state, src_code, stop_event):
                 terminate = True
                 break
 
+            messages = [{'role': 'user', 'content': prompt_variable_replacement(task['prompts']['semantic_repair'][semantic_repair_result], src_code, generation, feedback)}]
+            save_translation(state, src_code, generation, verification_success, generation_result, feedback)
+            
             generation = query(state, 'semantic_repair', messages)
             messages.append({'role': 'assistant', 'content' : generation})
             state['semantic_repair_attempt'] += 1
@@ -320,6 +316,10 @@ def generation_loop(state, src_code, stop_event):
             break
 
     if terminate:
+        output_path = f"{config['output']}/{generate_llm_triple_string(state['llm_triple'])}/{state['problem_name']}"
+        os.makedirs(output_path, exist_ok=True)
+        with open(f"{output_path}/terminated", 'w') as file:
+            file.write(generation + "\n\n\n---Feedback---\n" + feedback)
         stop_event.set()
         print("attempt terminated")
         
@@ -379,10 +379,6 @@ def inference():
                 print(f"{problem_name} result already exists... skipping\n")
                 continue
 
-
-            # with open(f"{config['output']}/current_problem.txt",'w') as file:
-            #     file.write(code_sample) 
-            
             successful = False
             start_time = time.time()
             with concurrent.futures.ThreadPoolExecutor(max_workers=config['gpus']) as executor:

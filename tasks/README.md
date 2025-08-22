@@ -3,25 +3,34 @@
 A translation task consists of:
 - a task description
 - a set of preprocessing transformations
-- an oracle feedback provider
-- dataset(s) corresponding to the problem. 
+- a verifier that provides feedback
+
+A template is provided in tasks/Template
 
 ## Task Description
 
-A task description requires the following elements:
+A task description is defined in a file description.json and requires the following elements:
 
-- prompt for the LLM
-- input specification/tutorial
-- output specification/tutorial
+- prompts for the LLM
+- input & output specification/tutorial
 
 ## Preprocessing Transformations
 
-A set of preprocessing transformations consists of a schedule of transformations to run
+Preprocessing transformations are to be implemented in a file preprocess.py
 
-## Oracle Feedback Provider
+The function preprocess is defined, which takes in the input code and returns a preprocessed form ready for LLM queries
 
-An oracle is a piece of software (e.g. solver, program analysis, compiler, etc.) which relays a verdict on the generated translation.
+## Verifier
 
-## Dataset
+Verifiers should be implemented in a file named verify.py
 
-A dataset is a list of tests to compare the translation generations against.
+They must have 3 functions defined, verify_generation, verify_syntax, and verify_semantics, which each accept:
+- the state information of the particular attempt
+- a lock to use for synchronization across multiple threads attempting this problem
+- the original src_code
+- the most recently generated code from the LLM
+
+These functions should return:
+- a verdict (True = accepted, False = rejected)
+- a status code string e.g. 'error_missing_semicolon' which will be used as a key to lookup the next prompt
+- a feedback string such as an error message or other important information that may assist the model in repair of its attempt
